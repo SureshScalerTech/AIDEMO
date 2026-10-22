@@ -1,0 +1,21 @@
+{
+  "name": "sureshverse-intro",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SureshVerse cinematic YouTube channel intro — HTML/Canvas/Web Audio with deterministic 1920×1080 30 fps MP4 export",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs 8080",
+    "export": "node scripts/export.mjs",
+    "export:preview": "node scripts/export.mjs --preview",
+    "export:frames": "node scripts/export.mjs --frames",
+    "qc": "node scripts/qc.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}

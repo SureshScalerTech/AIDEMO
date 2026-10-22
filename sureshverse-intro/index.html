@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SureshVerse Intro</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <div id="stage" class="stage">
+        <canvas id="stage-canvas" width="1920" height="1080" aria-label="SureshVerse animated channel intro"></canvas>
+        <button id="hint" class="hint" type="button">🔊 Click to replay with sound</button>
+      </div>
+      <div class="controls" role="toolbar" aria-label="Intro controls">
+        <button id="btn-replay" type="button" title="Replay from start (R)">⟲ Replay</button>
+        <button id="btn-play" type="button" title="Play / pause (Space)" aria-label="Pause">❚❚</button>
+        <button id="btn-sound" type="button" title="Sound on / off (M)">🔇</button>
+        <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Timeline" />
+        <span id="time" class="time">0.00s / 12.00s</span>
+        <button id="btn-fs" type="button" title="Fullscreen (F)">⛶</button>
+      </div>
+    </main>
+
+    <script src="js/util.js"></script>
+    <script src="js/brand.js"></script>
+    <script src="js/earth.js"></script>
+    <script src="js/scenes/cosmos.js"></script>
+    <script src="js/scenes/tech.js"></script>
+    <script src="js/scenes/travel.js"></script>
+    <script src="js/scenes/lockup.js"></script>
+    <script src="js/intro.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/player.js"></script>
+  </body>
+</html>
