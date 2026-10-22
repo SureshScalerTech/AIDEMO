@@ -1,16 +1,15 @@
-/* End screen / outro (15 s): "Thanks for watching", two video slots for
- * YouTube end-screen elements, and an animated Like → Subscribe → Bell call
- * to action next to the channel-icon slot.
+/* End screen / outro (15 s): "Thanks for watching" and an animated
+ * Like → Subscribe → Bell call to action next to the channel-icon slot.
  *
  *   0.0 – 1.4   background, brand row and headline assemble
- *   0.6 – 1.6   video slots slide in (WATCH NEXT / RECOMMENDED)
  *   1.4 – 2.2   subscribe row rises in
  *   2.5 – 5.6   cursor: like (2.9) → subscribe (3.8) → bell (4.7) → exits
  *   5.6 – 14.4  ambient hold (gentle pulses, bell reminders at 9 s and 12 s)
  *  14.45 – 15   fade to black
  *
- * Layout of the YouTube end-screen element slots, in 1920×1080 pixels
- * (also drawn as an overlay with ?guide=1):
+ * The subscribe row is laid out in its own coordinates and placed on screen
+ * by ROW (scale about its centre). The resulting channel-icon slot, in
+ * 1920×1080 pixels, is SLOTS.subscribe (drawn as an overlay with ?guide=1).
  */
 (function () {
   const SV = window.SV;
@@ -18,14 +17,21 @@
   const E = U.ease;
   const B = SV.brand;
 
-  const SLOTS = {
-    videoA: { x: 200, y: 330, w: 680, h: 382 },
-    videoB: { x: 1040, y: 330, w: 680, h: 382 },
-    subscribe: { cx: 646, cy: 872, r: 92 },
-  };
+  // row-local layout
+  const ICON = { cx: 646, cy: 872, r: 92 };
   const LIKE = { x: 778, y: 830, w: 136, h: 84 };
   const SUB = { x: 936, y: 830, w: 330, h: 84 };
   const BELL = { cx: 1330, cy: 872, r: 42 };
+  // place the row centred on screen at 1.3× size
+  const ROW = { ox: 960, oy: 872, x: 960, y: 640, s: 1.3 };
+  const toScreen = (x, y) => ({ x: ROW.x + (x - ROW.ox) * ROW.s, y: ROW.y + (y - ROW.oy) * ROW.s });
+  const iconPos = toScreen(ICON.cx, ICON.cy);
+  const SLOTS = { subscribe: { cx: Math.round(iconPos.x), cy: Math.round(iconPos.y), r: Math.round(ICON.r * ROW.s) } };
+  function rowSpace(ctx) {
+    ctx.translate(ROW.x, ROW.y);
+    ctx.scale(ROW.s, ROW.s);
+    ctx.translate(-ROW.ox, -ROW.oy);
+  }
 
   const guide = new URLSearchParams(location.search).get("guide") === "1";
   let stars, motes, spark, sparkGold;
@@ -51,7 +57,7 @@
     ctx.fillRect(0, 0, 1920, 1080);
 
     // warm gold + cyan horizon glow behind the subscribe row
-    const hg = ctx.createRadialGradient(960, 800, 0, 960, 800, 1000);
+    const hg = ctx.createRadialGradient(960, 660, 0, 960, 660, 1000);
     hg.addColorStop(0, "rgba(255,180,100,0.16)");
     hg.addColorStop(0.35, "rgba(0,150,255,0.10)");
     hg.addColorStop(1, "rgba(0,60,160,0)");
@@ -65,7 +71,7 @@
     }
 
     // perspective grid floor
-    const hy = 760;
+    const hy = 820;
     ctx.save();
     ctx.lineWidth = 1;
     for (let i = -22; i <= 22; i++) {
@@ -102,7 +108,7 @@
     for (let i = 0; i < 3; i++) {
       const q = U.fract(t / 5 + i / 3);
       const x0 = U.lerp(-500, 2400, q);
-      const yy = 760 + i * 26;
+      const yy = 820 + i * 26;
       const g = ctx.createLinearGradient(x0 - 600, 0, x0, 0);
       g.addColorStop(0, "rgba(0,0,0,0)");
       g.addColorStop(1, i === 1 ? "rgba(255,200,120,0.5)" : "rgba(0,229,255,0.5)");
@@ -118,7 +124,7 @@
     if (a > 0) {
       ctx.save();
       ctx.globalAlpha = a;
-      B.drawS(ctx, 830, 92 + (1 - a) * 14, 0.2, Math.sin(t * 0.8) * 0.15, { glow: 0.6, line: 1, dashOffset: t * 30 });
+      B.drawS(ctx, 830, 162 + (1 - a) * 14, 0.2, Math.sin(t * 0.8) * 0.15, { glow: 0.6, line: 1, dashOffset: t * 30 });
       ctx.restore();
       ctx.save();
       ctx.globalAlpha = a;
@@ -129,134 +135,17 @@
       ctx.fillStyle = "#ffffff";
       ctx.shadowColor = "rgba(0,170,255,0.6)";
       ctx.shadowBlur = 16;
-      ctx.fillText(B.WORD_A, 868, 96 + (1 - a) * 14);
+      ctx.fillText(B.WORD_A, 868, 166 + (1 - a) * 14);
       ctx.fillStyle = "#00e5ff";
-      ctx.fillText(B.WORD_B, 868 + wa, 96 + (1 - a) * 14);
+      ctx.fillText(B.WORD_B, 868 + wa, 166 + (1 - a) * 14);
       ctx.restore();
     }
     const h = E.outCubic(U.range(t, 0.45, 1.25));
     const sp = U.lerp(26, 10, E.outCubic(U.range(t, 0.45, 1.8)));
-    B.drawSpaced(ctx, "THANKS FOR WATCHING", 960, 205 + (1 - h) * 20, 58, sp, "#ffffff", h, 800);
+    B.drawSpaced(ctx, "THANKS FOR WATCHING", 960, 290 + (1 - h) * 20, 64, sp, "#ffffff", h, 800);
     const sub = E.outCubic(U.range(t, 0.9, 1.6));
-    B.drawSpaced(ctx, "KEEP EXPLORING  •  WATCH NEXT  •  SUBSCRIBE", 960, 258 + (1 - sub) * 12, 20, 6, "#f5c56b", sub, 600);
+    B.drawSpaced(ctx, "EXPLORE. LEARN. CREATE.", 960, 350 + (1 - sub) * 12, 22, 10, "#f5c56b", sub, 600);
   }
-
-  // ---------- video slots ----------
-  function videoSlot(ctx, t, s, k, label, icon, seed) {
-    if (k <= 0) return;
-    ctx.save();
-    ctx.globalAlpha = k;
-    const cx = s.x + s.w / 2, cy = s.y + s.h / 2;
-    const sc = U.lerp(0.9, 1, k);
-    ctx.translate(cx, cy);
-    ctx.scale(sc, sc);
-    ctx.translate(-cx, -cy);
-
-    // glass panel
-    const g = ctx.createLinearGradient(s.x, s.y, s.x + s.w, s.y + s.h);
-    g.addColorStop(0, "rgba(10,40,90,0.75)");
-    g.addColorStop(1, "rgba(4,16,40,0.85)");
-    ctx.fillStyle = g;
-    ctx.shadowColor = "rgba(0,150,255,0.35)";
-    ctx.shadowBlur = 40;
-    ctx.beginPath();
-    ctx.roundRect(s.x, s.y, s.w, s.h, 16);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(0,229,255,0.45)";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // shimmer sweep
-    ctx.save();
-    ctx.clip();
-    const q = U.fract(t / 3.2 + seed);
-    const x0 = U.lerp(s.x - 300, s.x + s.w + 300, q);
-    const sg = ctx.createLinearGradient(x0 - 140, 0, x0 + 140, 0);
-    sg.addColorStop(0, "rgba(255,255,255,0)");
-    sg.addColorStop(0.5, "rgba(140,220,255,0.10)");
-    sg.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = sg;
-    ctx.fillRect(s.x, s.y, s.w, s.h);
-    ctx.restore();
-
-    // animated corner brackets
-    const c = 30 + 6 * Math.sin(t * 2 + seed * 9);
-    ctx.strokeStyle = "rgba(140,235,255,0.95)";
-    ctx.lineWidth = 3;
-    for (const [sx, sy] of [[0, 0], [1, 0], [1, 1], [0, 1]]) {
-      const x = s.x + sx * s.w + (sx ? 10 : -10), y = s.y + sy * s.h + (sy ? 10 : -10);
-      const dx = sx ? -1 : 1, dy = sy ? -1 : 1;
-      ctx.beginPath();
-      ctx.moveTo(x + dx * c, y);
-      ctx.lineTo(x, y);
-      ctx.lineTo(x, y + dy * c);
-      ctx.stroke();
-    }
-
-    // play button
-    const pulse = 1 + 0.06 * Math.sin(t * 3 + seed * 5);
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(pulse, pulse);
-    ctx.fillStyle = "rgba(0,229,255,0.12)";
-    ctx.strokeStyle = "rgba(160,240,255,0.9)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(0, 0, 54, 0, U.TAU);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#ffffff";
-    ctx.shadowColor = "rgba(0,229,255,0.9)";
-    ctx.shadowBlur = 18;
-    ctx.beginPath();
-    ctx.moveTo(-16, -24);
-    ctx.lineTo(28, 0);
-    ctx.lineTo(-16, 24);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    // progress line + caption inside the slot
-    ctx.fillStyle = "rgba(255,255,255,0.15)";
-    ctx.fillRect(s.x + 30, s.y + s.h - 40, s.w - 60, 4);
-    ctx.fillStyle = "rgba(0,229,255,0.9)";
-    ctx.fillRect(s.x + 30, s.y + s.h - 40, (s.w - 60) * (0.25 + 0.5 * U.fract(t / 9 + seed)), 4);
-
-    // label above the slot
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-    ctx.font = `700 24px ${U.FONT}`;
-    ctx.letterSpacing = "6px";
-    ctx.fillStyle = "#ffffff";
-    ctx.shadowColor = "rgba(0,170,255,0.6)";
-    ctx.shadowBlur = 12;
-    ctx.fillText(label, s.x + 44, s.y - 22);
-    ctx.shadowBlur = 0;
-    icon(ctx, s.x + 18, s.y - 31);
-    ctx.restore();
-  }
-
-  const playIcon = (ctx, x, y) => {
-    ctx.fillStyle = "#00e5ff";
-    ctx.beginPath();
-    ctx.moveTo(x - 6, y - 9);
-    ctx.lineTo(x + 9, y);
-    ctx.lineTo(x - 6, y + 9);
-    ctx.closePath();
-    ctx.fill();
-  };
-  const starIcon = (ctx, x, y) => {
-    ctx.fillStyle = "#f5c56b";
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const a = -Math.PI / 2 + (i * Math.PI) / 5;
-      const r = i % 2 ? 4.5 : 11;
-      ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-    }
-    ctx.closePath();
-    ctx.fill();
-  };
 
   // ---------- subscribe row ----------
   function thumb(ctx, x, y, s, fill) {
@@ -346,10 +235,11 @@
     if (k <= 0) return;
     ctx.save();
     ctx.translate(0, (1 - k) * 40);
+    rowSpace(ctx);
     ctx.globalAlpha = k;
 
     // channel-icon slot: logo inside a rotating energy ring
-    const S0 = SLOTS.subscribe;
+    const S0 = ICON;
     const breathe = 1 + 0.03 * Math.sin(t * 2.2);
     ctx.save();
     ctx.fillStyle = "rgba(4,16,40,0.9)";
@@ -373,7 +263,10 @@
       ctx.stroke();
     }
     ctx.restore();
-    B.drawS(ctx, S0.cx, S0.cy, 0.48, Math.sin(t * 0.9) * 0.2, { glow: 0.7, line: 1, dashOffset: t * 30, alpha: k });
+    // drawS sets an absolute transform, so give it screen coordinates
+    B.drawS(ctx, iconPos.x, iconPos.y + (1 - k) * 40, 0.48 * ROW.s, Math.sin(t * 0.9) * 0.2, { glow: 0.7, line: 1, dashOffset: t * 30, alpha: k });
+    ctx.setTransform(1, 0, 0, 1, 0, (1 - k) * 40);
+    rowSpace(ctx);
 
     // LIKE
     const liked = t >= CLICK.like;
@@ -508,14 +401,14 @@
   function cursorPos(t) {
     // keyframes: [time, x, y]
     const K = [
-      [2.45, 1500, 1120],
+      [2.45, 1500, 1300],
       [2.85, LIKE.x + 74, LIKE.y + 50],
       [3.15, LIKE.x + 74, LIKE.y + 50],
       [3.75, SUB.x + 190, SUB.y + 52],
       [4.1, SUB.x + 190, SUB.y + 52],
       [4.65, BELL.cx + 6, BELL.cy + 8],
       [5.0, BELL.cx + 6, BELL.cy + 8],
-      [5.6, 1620, 1130],
+      [5.6, 1620, 1300],
     ];
     if (t <= K[0][0]) return { x: K[0][1], y: K[0][2] };
     for (let i = 0; i < K.length - 1; i++) {
@@ -535,6 +428,7 @@
     const clk = Math.max(press(t, CLICK.like), press(t, CLICK.sub), press(t, CLICK.bell));
     const s = 1.6 * (1 - clk * 0.15);
     ctx.save();
+    rowSpace(ctx);
     ctx.translate(p.x, p.y);
     ctx.scale(s, s);
     ctx.shadowColor = "rgba(0,0,0,0.6)";
@@ -583,8 +477,6 @@
   function draw(ctx, t) {
     background(ctx, t);
     header(ctx, t);
-    videoSlot(ctx, t, SLOTS.videoA, E.outCubic(U.range(t, 0.6, 1.4)), "WATCH NEXT", playIcon, 0.1);
-    videoSlot(ctx, t, SLOTS.videoB, E.outCubic(U.range(t, 0.8, 1.6)), "RECOMMENDED", starIcon, 0.55);
     subscribeRow(ctx, t);
     cursor(ctx, t);
     if (guide) drawGuide(ctx);

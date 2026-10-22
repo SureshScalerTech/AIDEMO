@@ -5,7 +5,7 @@ Two branded videos for **SureshVerse** (*Explore. Learn. Create.*), both 1920 ×
 | Video | Length | Page | MP4 |
 |---|---|---|---|
 | **Channel intro** | 12 s | `index.html` | `output/sureshverse-intro.mp4` |
-| **End screen / outro** ("Thanks for watching" + Watch & Subscribe) | 15 s | `outro.html` | `output/sureshverse-outro.mp4` |
+| **End screen / outro** ("Thanks for watching" + Like & Subscribe) | 15 s | `outro.html` | `output/sureshverse-outro.mp4` |
 
 Both are built with plain HTML, Canvas 2D and the Web Audio API. They play live in a browser and export to production MP4s frame by frame.
 
@@ -33,7 +33,7 @@ sureshverse-intro/
 │   │   └── lockup.js          Scene 5: final lockup + fade to black
 │   ├── comp.js                Shared engine: canvas, fonts, vignette, grain, fades, motion blur
 │   ├── intro.js               Intro timeline + transitions
-│   ├── outro.js               End screen: video slots, Like → Subscribe → Bell animation
+│   ├── outro.js               End screen: Like → Subscribe → Bell animation
 │   ├── audio.js               Instrument kit + intro/outro scores + WAV encoder
 │   └── player.js              Live playback, audio sync, scrubbing, shortcuts
 ├── assets/fonts/              Montserrat variable font + OFL licence
@@ -41,7 +41,7 @@ sureshverse-intro/
 │   ├── serve.mjs              Zero-dependency local web server
 │   ├── export.mjs             Deterministic frame renderer → FFmpeg → MP4
 │   └── qc.mjs                 Automated quality check + contact sheet
-├── docs/end-screen-guide.jpg  Where to place YouTube end-screen elements
+├── docs/end-screen-guide.jpg  Where to place YouTube's subscribe element
 ├── audio/                     Generated soundtrack WAVs (created by export)
 ├── output/                    MP4s and QC images (created by export / qc)
 └── package.json
@@ -117,12 +117,11 @@ ffmpeg -framerate 30 -i output/frames/frame_%05d.png -i audio/sureshverse-soundt
 
 You can also import the PNG sequence into Premiere, DaVinci Resolve or After Effects at 30 fps.
 
-## 5. End screen (Watch & Subscribe)
+## 5. End screen (Like & Subscribe)
 
 `outro.html` is a 15 s end screen (YouTube allows 5–20 s). It contains:
 
-- The **SureshVerse** brand row and **THANKS FOR WATCHING** headline
-- Two animated **video slots**, "WATCH NEXT" and "RECOMMENDED", where YouTube's video elements go
+- The **SureshVerse** brand row, the **THANKS FOR WATCHING** headline and the tagline
 - A **channel-icon circle** with the S logo, where YouTube's subscribe element goes
 - An animated cursor that clicks **Like** (2.9 s), then **Subscribe**, which turns into "✓ SUBSCRIBED" with a spark burst (3.8 s), then the **notification bell**, which rings (4.7 s)
 - A soft ambient hold, with bell reminders at 9 s and 12 s, then a fade to black
@@ -133,14 +132,9 @@ The like, subscribe and bell graphics are original drawings. They don't use the 
 
 1. Append `sureshverse-outro.mp4` to the end of each video in your editor, so the end screen fills the final 15 s.
 2. After uploading, go to **YouTube Studio → Content → (video) → Editor → End screen**.
-3. Add **2 video elements** and **1 subscribe element**. Drag them over the magenta guides shown in `docs/end-screen-guide.jpg`. To render your own guide, run `npm run export:outro:guide` or open `outro.html?guide=1`.
-   | Element | Position in the 1920×1080 frame |
-   |---|---|
-   | Video A ("Watch next" → *Most recent upload*) | x 200, y 330, 680 × 382 |
-   | Video B ("Recommended" → *Best for viewer*) | x 1040, y 330, 680 × 382 |
-   | Subscribe (channel icon) | circle centred at x 646, y 872, radius 92 |
-4. Set each element to run for the whole end screen, i.e. the last 15 s of the video.
-5. Preview it in Studio. The animated placeholders sit underneath YouTube's clickable thumbnails, so the slot labels and glow frames stay visible around them.
+3. Add a **subscribe element** and drag it onto the S-logo circle, shown in magenta in `docs/end-screen-guide.jpg`. It's a circle centred at x 552, y 640 with radius 120 in the 1920×1080 frame. To render your own guide, run `npm run export:outro:guide` or open `outro.html?guide=1`.
+4. YouTube requires every end screen to include **at least one video or playlist element**. The design has no video boxes, so place that element in an open area: either side of the centre row, or the lower third of the frame.
+5. Set the elements to show for the whole end screen, i.e. the last 15 s of the video, then preview it in Studio.
 
 ## 6. Audio
 
@@ -170,7 +164,7 @@ The soundtrack (`js/audio.js`) is synthesised from oscillators, filtered noise a
 
 | Time (s) | Picture | Sound |
 |---|---|---|
-| 0.10 – 0.90 | Brand row, headline and video slots assemble | Soft whoosh + light impact |
+| 0.10 – 0.90 | Brand row and headline assemble | Soft whoosh + light impact |
 | 0.00 – 15.0 | | Calm D – Bm – G – A pads with a gentle arpeggio; soft pulse from 5 s |
 | 2.90 | Cursor clicks **Like** | Click + pop |
 | 3.80 | **Subscribe** → ✓ SUBSCRIBED, spark burst | Click + confirmation chime |
@@ -193,7 +187,7 @@ The soundtrack (`js/audio.js`) is synthesised from oscillators, filtered noise a
 
 - **Timing:** each scene reads absolute time `t`. The transition windows are in `js/intro.js` and the score is in `A.build()` in `js/audio.js`. Change both together.
 - **Colours:** `U.C` in `js/util.js`, plus the gradients in each scene.
-- **Text:** the tagline and category line are in `js/scenes/cosmos.js` and `js/scenes/lockup.js`. Panel labels are in the `PANELS` array in `js/scenes/tech.js`. End-screen text and slot positions (`SLOTS`) are in `js/outro.js`.
+- **Text:** the tagline and category line are in `js/scenes/cosmos.js` and `js/scenes/lockup.js`. Panel labels are in the `PANELS` array in `js/scenes/tech.js`. End-screen text and the row's placement and size (`ROW`) are in `js/outro.js`.
 - **Why Canvas 2D rather than Three.js:** all of the 3D effects (sphere-mapped Earth, rotating extruded S, projected neural globe, perspective road) are computed directly. That keeps the project free of dependencies, fast enough for real-time playback, and exactly reproducible for frame export.
 
 ## Credits & licences
