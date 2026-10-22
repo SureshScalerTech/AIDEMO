@@ -91,11 +91,19 @@ body.ready .hint { opacity: 1; }
 }
 .controls button:hover { background: rgba(0, 229, 255, 0.2); }
 .controls button:focus-visible, #scrub:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.controls .nav {
+  font: 600 13px/1 "Montserrat", sans-serif;
+  color: var(--cyan);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 9px 4px;
+}
+.controls .nav:hover { text-decoration: underline; }
 #scrub { flex: 1; accent-color: var(--cyan); min-width: 60px; }
 .time { font: 500 13px/1 ui-monospace, monospace; min-width: 118px; text-align: right; }
 
 @media (max-width: 600px) {
-  .time { display: none; }
+  .time, .controls .nav { display: none; }
   .controls { gap: 6px; padding: 6px; }
   .controls button { padding: 8px 10px; }
 }

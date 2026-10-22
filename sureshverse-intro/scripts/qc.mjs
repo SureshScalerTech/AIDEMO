@@ -1,5 +1,5 @@
 // Quality check for the exported MP4.
-//   node scripts/qc.mjs [file.mp4]
+//   node scripts/qc.mjs [file.mp4] [--duration seconds]   (default 12; the end screen is 15)
 // Verifies resolution / fps / frame count / duration / audio, measures loudness,
 // and writes a contact sheet + key-frame stills to output/qc/.
 import { spawnSync } from "node:child_process";
@@ -8,10 +8,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const file = path.resolve(ROOT, process.argv[2] || "output/sureshverse-intro.mp4");
+const args = process.argv.slice(2);
+const di = args.indexOf("--duration");
+const DUR = di >= 0 ? Number(args.splice(di, 2)[1]) : 12;
+const file = path.resolve(ROOT, args[0] || "output/sureshverse-intro.mp4");
+const tag = path.basename(file, ".mp4");
 const ffmpeg = process.env.FFMPEG_PATH || "ffmpeg";
 const ffprobe = process.env.FFPROBE_PATH || "ffprobe";
-const qcDir = path.join(ROOT, "output", "qc");
+const qcDir = path.join(ROOT, "output", "qc", tag);
 fs.mkdirSync(qcDir, { recursive: true });
 
 if (!fs.existsSync(file)) {
@@ -36,8 +40,8 @@ const frames = Number(v.nb_read_frames);
 
 check("resolution", v.width === 1920 && v.height === 1080, `${v.width}×${v.height}`);
 check("frame rate", Math.abs(fps - 30) < 0.01, `${fps.toFixed(3)} fps`);
-check("frame count", frames >= 358 && frames <= 362, `${frames} frames`);
-check("duration", dur >= 11.9 && dur <= 12.1, `${dur.toFixed(3)} s`);
+check("frame count", Math.abs(frames - DUR * 30) <= 2, `${frames} frames`);
+check("duration", Math.abs(dur - DUR) <= 0.1, `${dur.toFixed(3)} s`);
 check("video codec", v.codec_name === "h264" && v.pix_fmt === "yuv420p", `${v.codec_name} ${v.profile} ${v.pix_fmt} ${v.color_space || ""}`);
 check("audio stream", !!a, a ? `${a.codec_name} ${a.sample_rate} Hz ${a.channels}ch ${Math.round(a.bit_rate / 1000)} kbps` : "none");
 
@@ -52,12 +56,12 @@ if (a) {
 // black first/last frames are intended; check the middle isn't black anywhere
 const bd = run(ffmpeg, ["-hide_banner", "-i", file, "-vf", "blackdetect=d=0.15:pic_th=0.97", "-an", "-f", "null", "-"]).stderr;
 const blacks = [...bd.matchAll(/black_start:([\d.]+) black_end:([\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
-const midBlack = blacks.filter(([s, e]) => s > 0.4 && e < 11.6);
+const midBlack = blacks.filter(([s, e]) => s > 0.6 && e < DUR - 0.6);
 check("no blank gaps", midBlack.length === 0, blacks.length ? blacks.map(([s, e]) => `${s.toFixed(2)}–${e.toFixed(2)}s`).join(", ") + " (start/end fades expected)" : "none");
 
 // contact sheet: one frame every half second
-run(ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-i", file, "-vf", "select='not(mod(n\\,15))',scale=384:-1,tile=6x4:padding=4:color=black", "-frames:v", "1", "-update", "1", path.join(qcDir, "contact-sheet.jpg")]);
-for (const s of [1.5, 2.6, 4.2, 5.5, 6.0, 7.0, 8.0, 9.0, 10.0, 11.2]) {
+run(ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-i", file, "-vf", `select='not(mod(n\\,15))',scale=384:-1,tile=6x${Math.ceil((DUR * 2) / 6)}:padding=4:color=black`, "-frames:v", "1", "-update", "1", path.join(qcDir, "contact-sheet.jpg")]);
+for (const s of Array.from({ length: 10 }, (_, i) => +((DUR * (i + 0.5)) / 10).toFixed(1))) {
   run(ffmpeg, ["-y", "-hide_banner", "-loglevel", "error", "-ss", String(s), "-i", file, "-frames:v", "1", "-update", "1", path.join(qcDir, `still_${s.toFixed(1)}s.jpg`)]);
 }
 console.log(`\nContact sheet and stills → ${path.relative(ROOT, qcDir)}/`);

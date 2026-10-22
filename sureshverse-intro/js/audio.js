@@ -1,9 +1,10 @@
-/* Original procedural soundtrack, synthesised with the Web Audio API.
+/* Original procedural soundtracks, synthesised with the Web Audio API.
+ * A shared instrument kit plays one score per video (intro, outro).
  * No samples or third-party music are used, so the audio is fully original and
  * royalty-free. The whole 12 s score is rendered offline (OfflineAudioContext),
  * which makes it sample-accurate and identical for the player and the MP4 export.
  *
- * Cue sheet (seconds):
+ * Intro cue sheet (seconds):
  *   0.00  atmospheric pad (D minor 9) + space wind
  *   0.40  rising futuristic synth riser → 3.0
  *   1.45  energy-beam whoosh, panned L → R
@@ -19,6 +20,8 @@
  *   9.55  reverse swell into
  *  10.00  final orchestral-electronic hit: D major, brass, timpani, bells
  *  11.30  fade out → silence at 12.0
+ *
+ * Outro (end screen) cue sheet: see A.scores.outro below.
  */
 (function () {
   const SV = window.SV;
@@ -26,11 +29,13 @@
   const A = (SV.audio = {});
 
   A.SR = 48000;
-  A.DURATION = 12;
+  A.DURATIONS = { intro: 12, outro: 15 };
+  // master level per score, tuned so both land near YouTube's -14 LUFS
+  A.LEVELS = { intro: 0.9, outro: 1.55 };
 
   const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
   // note names → midi
-  const N = { D1: 26, A1: 33, D2: 38, F2: 41, A2: 45, Bb1: 34, Bb2: 46, C2: 36, C3: 48, D3: 50, E3: 52, F3: 53, G3: 55, A3: 57, Bb3: 58, C4: 60, D4: 62, E4: 64, F4: 65, Fs3: 54, Fs4: 66, G4: 67, A4: 69, Bb4: 70, C5: 72, D5: 74, E5: 76, Fs5: 78, A5: 81 };
+  const N = { B2: 47, B3: 59, G2: 43, Cs4: 61, E2: 40, D1: 26, A1: 33, D2: 38, F2: 41, A2: 45, Bb1: 34, Bb2: 46, C2: 36, C3: 48, D3: 50, E3: 52, F3: 53, G3: 55, A3: 57, Bb3: 58, C4: 60, D4: 62, E4: 64, F4: 65, Fs3: 54, Fs4: 66, G4: 67, A4: 69, Bb4: 70, C5: 72, D5: 74, E5: 76, Fs5: 78, A5: 81 };
 
   function noiseBuffer(ctx, sec, seed) {
     const r = U.rng(seed);
@@ -56,8 +61,8 @@
     return b;
   }
 
-  /** Build the full score into `ctx`, routed to `out`, starting at ctx time t0. */
-  A.build = function (ctx, out, t0 = 0) {
+  /** Instrument kit: buses, master chain and instruments scheduled from ctx time t0. */
+  function kit(ctx, out, t0, duration, level) {
     const T = (s) => t0 + s;
     const noise = noiseBuffer(ctx, 4, 2024);
 
@@ -77,9 +82,9 @@
     limiter.release.value = 0.08;
     master.connect(comp).connect(limiter).connect(out);
     master.gain.setValueAtTime(0.0001, T(0));
-    master.gain.linearRampToValueAtTime(0.9, T(0.6));
-    master.gain.setValueAtTime(0.9, T(11.25));
-    master.gain.linearRampToValueAtTime(0.0, T(11.98));
+    master.gain.linearRampToValueAtTime(level, T(0.6));
+    master.gain.setValueAtTime(level, T(duration - 0.75));
+    master.gain.linearRampToValueAtTime(0.0, T(duration - 0.02));
 
     const verb = ctx.createConvolver();
     verb.buffer = impulse(ctx, 3.6, 2.6, 77);
@@ -240,7 +245,9 @@
       }
     }
 
+    let arpBus = null;
     function pluck(at, m, gain, cut, pan) {
+      if (!arpBus) arpBus = bus(1, 0.35);
       const dest = arpBus;
       const o = ctx.createOscillator();
       o.type = "sawtooth";
@@ -365,6 +372,13 @@
       }
     }
 
+    return { T, N, mtof, master, pad, riser, whoosh, impact, pluck, bell, blip, kick, hat, timpani, brass };
+  }
+
+  A.scores = {};
+
+  A.scores.intro = function (k) {
+    const { T, pad, riser, whoosh, impact, pluck, bell, blip, kick, hat, timpani, brass } = k;
     const r = U.rng(5150);
 
     // ---------- the score ----------
@@ -379,7 +393,6 @@
     impact(T(3.0), 1);
     pad([N.Bb1, N.Bb2, N.F3, N.Bb3, N.D4, N.F4], T(3.0), T(6.1), { gain: 0.06, attack: 0.25, release: 0.3, cut0: 900, cut1: 2200 });
 
-    const arpBus = bus(1, 0.35);
     const chordAt = (s) =>
       s < 6 ? [N.Bb3, N.D4, N.F4, N.Bb4] : s < 8 ? [N.F3, N.A3, N.C4, N.F4] : s < 10 ? [N.C4, N.E4, N.G4, N.C5] : [N.D4, N.Fs4, N.A4, N.D5];
     const pattern = [0, 2, 1, 3, 2, 1, 3, 2];
@@ -427,18 +440,75 @@
     [N.D5, N.Fs5, N.A5].forEach((m, i) => bell(T(10.05 + i * 0.14), mtof(m), 0.05, (i - 1) * 0.5));
     bell(T(11.0), mtof(N.A5) * 2, 0.025, 0.3);
 
-    return master;
   };
 
+  /* Outro / end screen (15 s), calm and uplifting, D major:
+   *   0.15  soft whoosh-in + light impact as the end screen assembles
+   *   0.00  chord pads D – Bm – G – A (3.75 s each), gentle 8th-note arpeggio
+   *   2.90  "like" click + pop        3.80  "subscribe" click + confirm chime
+   *   4.70  bell click + ring          9.00 / 12.00  soft bell reminders
+   *  13.40  final D chord swell, fade to silence at 15.0
+   */
+  A.scores.outro = function (k) {
+    const { T, N, mtof, pad, whoosh, impact, pluck, bell, blip, kick } = k;
+    const chords = [
+      [N.D3, N.Fs3, N.A3, N.D4],
+      [N.B2, N.D3, N.Fs3, N.B3],
+      [N.G2, N.D3, N.G3, N.B3],
+      [N.A2, N.E3, N.A3, N.Cs4],
+    ];
+    const bass = [N.D2, N.B2 - 12, N.G2 - 12, N.A2 - 12];
+    chords.forEach((c, i) => {
+      const s = i * 3.75;
+      pad(c, T(s), T(s + 3.85), { gain: 0.055, attack: i ? 0.35 : 1.0, release: 0.35, cut0: 700, cut1: 1500 });
+      pad([bass[i]], T(s), T(s + 3.85), { gain: 0.04, attack: 0.3, release: 0.35, cut0: 300, cut1: 400, type: "triangle", send: 0.2 });
+    });
+    pad([N.D2, N.A2, N.D3, N.Fs3, N.A3, N.D4, N.Fs4], T(13.4), T(15.0), { gain: 0.06, attack: 0.4, release: 1.0, cut0: 1800, cut1: 900 });
+
+    whoosh(T(0.1), 0.8, -0.6, 0.6, 0.22, 300, 4500);
+    impact(T(0.65), 0.28);
+    const pattern = [0, 2, 1, 3, 2, 1, 3, 2];
+    for (let i = 0; ; i++) {
+      const s = 1.0 + i * 0.25;
+      if (s > 13.8) break;
+      const c = chords[Math.min(3, Math.floor(s / 3.75))];
+      pluck(T(s), c[pattern[i % 8]] + 12, 0.035, 1400 + 600 * Math.sin(s * 0.7), i % 2 ? 0.3 : -0.3);
+    }
+    for (let b = 0; b < 20; b++) {
+      const s = 5.0 + b * 0.5;
+      if (s > 13.4) break;
+      kick(T(s), 0.22);
+    }
+    // UI interactions
+    blip(T(2.9), 1800, 0.05, 0.03, "sine", -0.2); // like click
+    blip(T(2.93), 900, 0.06, 0.08, "triangle", -0.2); // pop
+    blip(T(3.8), 1800, 0.05, 0.03, "sine", 0.1); // subscribe click
+    bell(T(3.86), mtof(N.A5), 0.05, 0.1);
+    bell(T(3.98), mtof(N.D5) * 2, 0.04, 0.1);
+    blip(T(4.7), 1800, 0.05, 0.03, "sine", 0.35); // bell click
+    [0, 0.09, 0.18, 0.27].forEach((d, i) => bell(T(4.76 + d), mtof(i % 2 ? N.Fs5 : N.A5) * 2, 0.03, 0.35));
+    [9.0, 12.0].forEach((s) => [0, 0.1].forEach((d) => bell(T(s + d), mtof(N.A5) * 2, 0.018, 0.35)));
+    bell(T(13.4), mtof(N.D5), 0.04, -0.2);
+    bell(T(13.55), mtof(N.A5), 0.035, 0.2);
+  };
+
+  /** Build a score into `ctx`, routed to `out`, starting at ctx time t0. */
+  A.build = function (ctx, out, t0 = 0, name = "intro") {
+    const k = kit(ctx, out, t0, A.DURATIONS[name], A.LEVELS[name]);
+    A.scores[name](k);
+    return k.master;
+  };
+
+
   /** Render the full soundtrack offline → AudioBuffer (cached). */
-  let cached = null;
-  A.render = function () {
-    if (cached) return cached;
+  const cached = {};
+  A.render = function (name = "intro") {
+    if (cached[name]) return cached[name];
     const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-    const ctx = new Ctx(2, Math.ceil(A.SR * A.DURATION), A.SR);
-    A.build(ctx, ctx.destination, 0);
-    cached = ctx.startRendering();
-    return cached;
+    const ctx = new Ctx(2, Math.ceil(A.SR * A.DURATIONS[name]), A.SR);
+    A.build(ctx, ctx.destination, 0, name);
+    cached[name] = ctx.startRendering();
+    return cached[name];
   };
 
   /** 16-bit PCM WAV encoder. */
@@ -467,8 +537,8 @@
     return out;
   };
 
-  A.wavBase64 = async function () {
-    const wav = new Uint8Array(A.toWav(await A.render()));
+  A.wavBase64 = async function (name = "intro") {
+    const wav = new Uint8Array(A.toWav(await A.render(name)));
     let s = "";
     for (let i = 0; i < wav.length; i += 0x8000) s += String.fromCharCode.apply(null, wav.subarray(i, i + 0x8000));
     return btoa(s);

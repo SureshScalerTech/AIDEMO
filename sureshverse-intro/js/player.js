@@ -3,15 +3,15 @@
  */
 (function () {
   const SV = window.SV;
-  const U = SV.util;
+  const C = SV.comp; // the composition this page loaded (intro or outro)
   const params = new URLSearchParams(location.search);
   const exportMode = params.get("mode") === "export";
 
   const canvas = document.getElementById("stage-canvas");
   const $ = (id) => document.getElementById(id);
 
-  SV.ready = SV.intro.init(canvas).then(() => {
-    SV.intro.renderAt(0);
+  SV.ready = C.init(canvas).then(() => {
+    C.renderAt(0);
     document.body.classList.add("ready");
   });
 
@@ -28,7 +28,7 @@
   let pausedAt = 0;
 
   // Pre-render the soundtrack in the background (no user gesture needed for offline rendering)
-  const audioReady = SV.audio.render().then((b) => (abuf = b)).catch((e) => console.warn("audio render failed", e));
+  const audioReady = SV.audio.render(C.audio).then((b) => (abuf = b)).catch((e) => console.warn("audio render failed", e));
 
   function now() {
     if (!playing) return pausedAt;
@@ -46,7 +46,7 @@
 
   function startAudioAt(t) {
     stopAudio();
-    if (!soundOn || !actx || !abuf || t >= U.DURATION) return;
+    if (!soundOn || !actx || !abuf || t >= C.DURATION) return;
     src = actx.createBufferSource();
     src.buffer = abuf;
     src.connect(actx.destination);
@@ -64,7 +64,7 @@
   }
 
   function pause() {
-    pausedAt = Math.min(now(), U.DURATION);
+    pausedAt = Math.min(now(), C.DURATION);
     playing = false;
     stopAudio();
     updateUI();
@@ -94,9 +94,9 @@
   let scrubbing = false;
   scrub.addEventListener("input", () => {
     scrubbing = true;
-    pausedAt = (scrub.value / 1000) * U.DURATION;
+    pausedAt = (scrub.value / 1000) * C.DURATION;
     if (playing) { playing = false; stopAudio(); }
-    SV.intro.renderAt(pausedAt);
+    C.renderAt(pausedAt);
     updateUI();
   });
   scrub.addEventListener("change", () => { scrubbing = false; });
@@ -105,7 +105,7 @@
   $("btn-play").addEventListener("click", async () => {
     if (playing) pause();
     else {
-      if (pausedAt >= U.DURATION - 0.01) pausedAt = 0;
+      if (pausedAt >= C.DURATION - 0.01) pausedAt = 0;
       await enableSound();
       play();
     }
@@ -139,16 +139,16 @@
 
   function loop() {
     let t = now();
-    if (playing && t >= U.DURATION) {
-      t = U.DURATION;
+    if (playing && t >= C.DURATION) {
+      t = C.DURATION;
       pausedAt = t;
       playing = false;
       stopAudio();
       updateUI();
     }
-    if (playing || !scrubbing) SV.intro.renderAt(t);
-    if (!scrubbing) scrub.value = Math.round((t / U.DURATION) * 1000);
-    $("time").textContent = `${t.toFixed(2)}s / ${U.DURATION.toFixed(2)}s`;
+    if (playing || !scrubbing) C.renderAt(t);
+    if (!scrubbing) scrub.value = Math.round((t / C.DURATION) * 1000);
+    $("time").textContent = `${t.toFixed(2)}s / ${C.DURATION.toFixed(2)}s`;
     requestAnimationFrame(loop);
   }
 

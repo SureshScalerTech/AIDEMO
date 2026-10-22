@@ -5,16 +5,18 @@
 // into FFmpeg and muxes the offline-rendered soundtrack.
 //
 //   node scripts/export.mjs [options]
-//     --out <file>        output MP4             (default output/sureshverse-intro.mp4)
+//     --comp <name>       intro | outro          (default intro)
+//     --out <file>        output MP4             (default output/sureshverse-<comp>.mp4)
 //     --fps <n>           frame rate             (default 30)
 //     --start <s>         first second           (default 0)
-//     --end <s>           last second            (default 12)
+//     --end <s>           last second            (default: full length, 12 / 15)
 //     --mb <n>            motion-blur sub-frames (default 3, 1 = off)
 //     --crf <n>           x264 quality, lower = better (default 14)
 //     --preview           fast 960×540 draft (mb 1, crf 22, veryfast)
 //     --frames            also keep PNG frames in output/frames/
 //     --no-audio          video only
 //     --audio <file.wav>  mux your own track instead of the generated one
+//     --guide             draw the end-screen element guide (outro only)
 //     --chromium <path>   use a specific Chrome/Chromium executable
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -25,10 +27,12 @@ import { startServer } from "./serve.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function parseArgs(argv) {
-  const o = { out: "output/sureshverse-intro.mp4", fps: 30, start: 0, end: 12, mb: 3, crf: 14, preview: false, frames: false, audio: true, audioFile: null, chromium: process.env.CHROMIUM_PATH || null };
+  const o = { comp: "intro", out: null, fps: 30, start: 0, end: null, guide: false, mb: 3, crf: 14, preview: false, frames: false, audio: true, audioFile: null, chromium: process.env.CHROMIUM_PATH || null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], v = () => argv[++i];
-    if (a === "--out") o.out = v();
+    if (a === "--comp") o.comp = v();
+    else if (a === "--guide") o.guide = true;
+    else if (a === "--out") o.out = v();
     else if (a === "--fps") o.fps = Number(v());
     else if (a === "--start") o.start = Number(v());
     else if (a === "--end") o.end = Number(v());
@@ -40,15 +44,16 @@ function parseArgs(argv) {
     else if (a === "--audio") o.audioFile = v();
     else if (a === "--chromium") o.chromium = v();
     else if (a === "-h" || a === "--help") {
-      console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(0, 22).join("\n"));
+      console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(0, 24).join("\n"));
       process.exit(0);
     } else throw new Error(`Unknown option ${a}`);
   }
+  if (!["intro", "outro"].includes(o.comp)) throw new Error(`Unknown --comp ${o.comp} (use intro or outro)`);
   if (o.preview) {
     o.mb = 1;
     o.crf = 22;
-    if (o.out === "output/sureshverse-intro.mp4") o.out = "output/sureshverse-intro-preview.mp4";
   }
+  if (!o.out) o.out = `output/sureshverse-${o.comp}${o.preview ? "-preview" : o.guide ? "-guide" : ""}.mp4`;
   return o;
 }
 
@@ -101,9 +106,13 @@ async function main() {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
   page.on("pageerror", (e) => console.error("[page error]", e.message));
   page.on("console", (m) => m.type() === "error" && console.error("[page]", m.text()));
-  await page.goto(`http://127.0.0.1:${port}/index.html?mode=export`);
+  const pageFile = o.comp === "outro" ? "outro.html" : "index.html";
+  await page.goto(`http://127.0.0.1:${port}/${pageFile}?mode=export${o.guide ? "&guide=1" : ""}`);
   await page.waitForFunction(() => window.SV && window.SV.ready);
   await page.evaluate(() => window.SV.ready);
+  const duration = await page.evaluate(() => window.SV.comp.DURATION);
+  if (o.end == null || o.end > duration) o.end = duration;
+  console.log(`Composition: ${o.comp} (${duration}s) → ${o.out}`);
 
   // ---- audio ----
   let audioPath = null;
@@ -112,8 +121,8 @@ async function main() {
       audioPath = path.resolve(o.audioFile);
     } else {
       process.stdout.write("Rendering soundtrack… ");
-      const b64 = await page.evaluate(() => window.SV.audio.wavBase64());
-      audioPath = path.join(ROOT, "audio", "sureshverse-soundtrack.wav");
+      const b64 = await page.evaluate((name) => window.SV.audio.wavBase64(name), o.comp);
+      audioPath = path.join(ROOT, "audio", o.comp === "intro" ? "sureshverse-soundtrack.wav" : `sureshverse-${o.comp}-soundtrack.wav`);
       fs.mkdirSync(path.dirname(audioPath), { recursive: true });
       fs.writeFileSync(audioPath, Buffer.from(b64, "base64"));
       console.log(`done → ${path.relative(ROOT, audioPath)}`);
@@ -146,8 +155,8 @@ async function main() {
     const t = o.start + i / o.fps;
     const b64 = await page.evaluate(
       ([t, mb]) => {
-        window.SV.intro.renderBlurred(t, mb, 0.5);
-        return window.SV.intro.canvas().toDataURL("image/png").slice(22);
+        window.SV.comp.renderBlurred(t, mb, 0.5);
+        return window.SV.comp.canvas().toDataURL("image/png").slice(22);
       },
       [t, o.mb]
     );

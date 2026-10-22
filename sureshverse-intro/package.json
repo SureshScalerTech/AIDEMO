@@ -9,7 +9,11 @@
     "export": "node scripts/export.mjs",
     "export:preview": "node scripts/export.mjs --preview",
     "export:frames": "node scripts/export.mjs --frames",
-    "qc": "node scripts/qc.mjs"
+    "export:outro": "node scripts/export.mjs --comp outro",
+    "export:outro:guide": "node scripts/export.mjs --comp outro --guide --mb 1",
+    "export:all": "node scripts/export.mjs && node scripts/export.mjs --comp outro",
+    "qc": "node scripts/qc.mjs",
+    "qc:outro": "node scripts/qc.mjs output/sureshverse-outro.mp4 --duration 15"
   },
   "devDependencies": {
     "playwright": "1.56.1"
