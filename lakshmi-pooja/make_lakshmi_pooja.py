@@ -7,12 +7,12 @@ Timeline (output seconds):
    5.0 - 11.6  full shots (slow motion, slow push-in, gold flash cuts, gold captions)
   11.6 - 14.4  JAI / LAKSHMI / MATA footage-inside-text card
   14.4 - 15.4  zoom through
-  15.4 - 26.8  full shots with captions
-  26.8 - 30.0  zoom back out into LAKSHMI POOJA, fade out
+  15.4 - 24.6  full shots with captions
+  24.6 - 30.0  final scene: Lakshmi Devi photo, slow push-in to the idol, glow, captions, fade
 
 The source clip contains a torn-paper intro and black glitch transitions; only the
 clean shots are used (some are replayed in reverse to reach 30 s).
-Usage: python3 make_lakshmi_pooja.py <input.mov> <output.mp4>
+Usage: python3 make_lakshmi_pooja.py <input.mov> <output.mp4> [final_photo.jpg]
 """
 import math
 import subprocess
@@ -39,18 +39,19 @@ SEGMENTS = [
     (*D[:2], 0.5, False, D[2]),       # 15.4 - 18.8  wide altar
     (*A[:2], 0.5, True, A[2]),        # 18.8 - 22.2  priest (reverse)
     (*C[:2], 0.5, True, C[2]),        # 22.2 - 24.6  prasadam (reverse)
-    (5.4, 8.0, 0.48, False, ""),      # 24.6 - 30.0  altar -> outro title
 ]
 
 INTRO_ZOOM = 4.0
 CARD_START, CARD_ZOOM = 11.6, 14.4
-OUTRO_START = 26.8
+PHOTO_START, T_END = 24.6, 30.0
+PHOTO_FOCUS = (0.48, 0.60)  # idol face, as fraction of photo width/height
 CAPTIONS = [
     (5.3, 9.0, "LAKSHMI POOJA", "Shubh Deepavali"),
     (9.3, 11.4, "OM SHRI MAHALAKSHMYAI NAMAH", "Prayers to Goddess Mahalakshmi"),
     (15.7, 18.6, "SUKH  SHANTI  SAMRIDDHI", "Peace, Prosperity & Happiness"),
     (19.0, 24.4, "JAI MAHALAKSHMI", "Blessings to every home"),
-    (24.8, 26.6, "LAKSHMI POOJA", "Shubh Deepavali"),
+    (25.4, 27.6, "OM SHRI MAHALAKSHMI", "Blessings of Goddess Lakshmi"),
+    (27.8, 30.5, "JAI MAHALAKSHMI", "Shubh Deepavali"),
 ]
 
 
@@ -251,13 +252,41 @@ def push_in(video, t_local, seg_len):
     return np.asarray(img, np.float32)
 
 
+def load_photo(path):
+    """Cover-fit the photo to 9:16 at 2x so the push-in stays sharp."""
+    img = Image.open(path).convert("RGB")
+    s = max(2 * W / img.width, 2 * H / img.height)
+    img = img.resize((int(img.width * s), int(img.height * s)), Image.LANCZOS)
+    fx = int(img.width * PHOTO_FOCUS[0])
+    left = min(max(fx - W, 0), img.width - 2 * W)
+    top = (img.height - 2 * H) // 2
+    return img.crop((left, top, left + 2 * W, top + 2 * H)), (fx - left) / (2 * W), PHOTO_FOCUS[1]
+
+
+def photo_frame(photo, fx, fy, p):
+    """Push in from 1.0x to 1.25x toward the idol (fx, fy fractions)."""
+    z = 1 + 0.25 * ease_in_out(p)
+    cw, ch = 2 * W / z, 2 * H / z
+    cx = W + (fx * 2 * W - W) * (z - 1) / 0.25 * 0.6
+    cy = H + (fy * 2 * H - H) * (z - 1) / 0.25 * 0.6
+    cx = min(max(cx, cw / 2), 2 * W - cw / 2)
+    cy = min(max(cy, ch / 2), 2 * H - ch / 2)
+    img = photo.resize((W, H), Image.BICUBIC, box=(cx - cw / 2, cy - ch / 2, cx + cw / 2, cy + ch / 2))
+    arr = np.asarray(img, np.float32)
+    bloom = np.asarray(img.filter(ImageFilter.GaussianBlur(30)), np.float32)
+    arr = 255 - (255 - arr) * (255 - bloom * 0.18) / 255  # soft divine glow (screen blend)
+    return arr
+
+
 # ---------------------------------------------------------------- main render
-def main(src, dst):
+def main(src, dst, photo_path):
     seg_out = [(b - a) / sp for a, b, sp, _, _ in SEGMENTS]
     starts = np.concatenate([[0], np.cumsum(seg_out)])
-    n = int(round(starts[-1] * FPS))
+    assert abs(starts[-1] - PHOTO_START) < 0.05, starts[-1]
+    n = int(round(T_END * FPS))
     T = n / FPS
-    cuts = [float(c) for c in starts[1:-1]]
+    cuts = [float(c) for c in starts[1:]]  # includes the cut into the photo
+    photo, pfx, pfy = load_photo(photo_path)
     print(f"rendering {n} frames ({T:.2f}s), cuts at {[round(c, 2) for c in cuts]}", flush=True)
 
     main_title = Title(["LAKSHMI", "POOJA"], "Blessings of Goddess Lakshmi")
@@ -286,13 +315,16 @@ def main(src, dst):
     last = None
     for i in range(n):
         t = i / FPS
-        buf = dec.stdout.read(fb)
-        if len(buf) < fb:
-            buf = last
-        last = buf
-        video = np.frombuffer(buf, np.uint8).reshape(H, W, 3).astype(np.float32)
-        seg = min(int(np.searchsorted(starts, t, side="right") - 1), len(SEGMENTS) - 1)
-        video = push_in(video, t - starts[seg], seg_out[seg])
+        if t < PHOTO_START:
+            buf = dec.stdout.read(fb)
+            if len(buf) < fb:
+                buf = last
+            last = buf
+            video = np.frombuffer(buf, np.uint8).reshape(H, W, 3).astype(np.float32)
+            seg = min(int(np.searchsorted(starts, t, side="right") - 1), len(SEGMENTS) - 1)
+            video = push_in(video, t - starts[seg], seg_out[seg])
+        else:
+            video = photo_frame(photo, pfx, pfy, (t - PHOTO_START) / (T_END - PHOTO_START))
 
         titled = True
         if t < INTRO_ZOOM + 1.0:
@@ -301,14 +333,6 @@ def main(src, dst):
         elif CARD_START <= t < CARD_ZOOM + 1.0:
             out = title_scene(card, video, t - CARD_START, CARD_ZOOM - CARD_START)
             out = out + (GOLD_HI - out) * clamp01(1 - (t - CARD_START) / 0.3) * 0.7
-        elif t >= OUTRO_START:
-            p = clamp01((t - OUTRO_START) / 0.9)
-            s = 1 + 15 * (1 - ease_in_out(p)) ** 3
-            tl = t - OUTRO_START - 0.9
-            sh = clamp01(tl / 1.0) if 0 < tl < 1.0 else None
-            out = title_frame(main_title, video, main_title.zoomed(s), clamp01(tl / 0.5), sh,
-                              bg_alpha=ease_in_out(p))
-            out = out * clamp01((T - t) / 0.6)
         else:
             titled = False
             out = video * VIGNETTE
@@ -324,10 +348,13 @@ def main(src, dst):
                 if a <= t < b:
                     al = clamp01((t - a) / 0.5) * clamp01((b - t) / 0.4)
                     rise = 30 * (1 - ease_in_out(clamp01((t - a) / 0.6)))
-                    out = place(out, m1, W / 2, H - 400 + rise, GOLD, al)
-                    out = place(out, m2, W / 2, H - 300 + rise, GOLD_HI, al * 0.95)
+                    y0 = 300 if t >= PHOTO_START else H - 400  # photo: top, clear of the idol
+                    out = place(out, m1, W / 2, y0 + rise, GOLD, al)
+                    out = place(out, m2, W / 2, y0 + 100 + rise, GOLD_HI, al * 0.95)
+            out = out * clamp01((T - t) / 0.8)  # final fade to black
 
-        sp = sparkle_layer(t, 0.9 if titled else 0.55)[..., None]
+        sp = sparkle_layer(t, 0.9 if (titled or t >= PHOTO_START) else 0.55)[..., None]
+        sp = sp * clamp01((T - t) / 0.8)
         out = out * (1 - sp) + GOLD_HI * sp
         enc.stdin.write(np.clip(out, 0, 255).astype(np.uint8).tobytes())
         if i % 60 == 0:
@@ -340,4 +367,5 @@ def main(src, dst):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    here = __file__.rsplit("/", 1)[0]
+    main(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else f"{here}/lakshmi_devi_photo.jpg")
